@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Readiness Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .drawer-overlay { transition: opacity 0.3s ease; }
+    .drawer-panel { transition: transform 0.3s ease; }
+    .drawer-panel.closed { transform: translateX(100%); }
+    .drawer-panel.open { transform: translateX(0); }
+    .sidebar-link { transition: background-color 0.15s ease; }
+    .sidebar-link:hover { background-color: rgba(255,255,255,0.1); }
+    .sort-header { cursor: pointer; user-select: none; }
+    .sort-header:hover { color: #3b82f6; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+<script>
+  const REPORT_DATA = /*__REPORT_DATA__*/ {} /*__END__*/;
+  const RUBRIC_DATA = /*__RUBRIC_DATA__*/ {} /*__END__*/;
+  const REMEDIATION_DATA = /*__REMEDIATION_DATA__*/ {} /*__END__*/;
+</script>
+
+<!-- Sidebar -->
+<aside id="sidebar" class="fixed top-0 left-0 h-full w-60 bg-gray-900 text-white flex flex-col z-40">
+  <div class="p-6 border-b border-gray-700">
+    <h1 class="text-lg font-bold tracking-tight">Readiness Dashboard</h1>
+    <div id="sidebar-stats" class="mt-3 text-sm text-gray-400">
+      <div id="sidebar-pass-rate" class="text-2xl font-bold text-white">--</div>
+      <div id="sidebar-level-badge" class="mt-1"></div>
+    </div>
+  </div>
+  <nav class="flex-1 py-4">
+    <a href="#summary" class="sidebar-link block px-6 py-2 text-sm text-gray-300">Summary</a>
+    <a href="#levels" class="sidebar-link block px-6 py-2 text-sm text-gray-300">Levels</a>
+    <a href="#scopes" class="sidebar-link block px-6 py-2 text-sm text-gray-300">Scopes</a>
+    <a href="#criteria" class="sidebar-link block px-6 py-2 text-sm text-gray-300">Criteria</a>
+    <a href="#actions" class="sidebar-link block px-6 py-2 text-sm text-gray-300">Actions</a>
+    <a href="#remediation-section" class="sidebar-link block px-6 py-2 text-sm text-gray-300">Remediation</a>
+  </nav>
+  <div class="p-6 border-t border-gray-700 text-xs text-gray-500">
+    Agent Readiness
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="ml-60 min-h-screen">
+
+  <!-- Empty State -->
+  <div id="empty-state" class="hidden flex items-center justify-center min-h-screen">
+    <div class="text-center">
+      <div class="text-6xl text-gray-300 mb-4">&#9744;</div>
+      <h2 class="text-xl font-semibold text-gray-500">No data loaded</h2>
+      <p class="text-gray-400 mt-2">Run the readiness pipeline to generate dashboard data.</p>
+    </div>
+  </div>
+
+  <!-- Content wrapper -->
+  <div id="content-wrapper" class="p-8 max-w-7xl mx-auto space-y-10">
+
+    <!-- Section 1: Summary -->
+    <section id="summary" class="pt-4">
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <!-- Left: Repo info -->
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900" id="summary-repo-name">--</h2>
+            <div class="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
+              <span id="summary-branch">Branch: --</span>
+              <span id="summary-commit">Commit: --</span>
+              <span id="summary-rubric">Rubric: --</span>
+            </div>
+          </div>
+          <!-- Center: Progress ring -->
+          <div class="flex items-center gap-6">
+            <div class="relative w-28 h-28">
+              <svg class="w-28 h-28 transform -rotate-90" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" stroke-width="10"/>
+                <circle id="progress-ring" cx="60" cy="60" r="52" fill="none" stroke="#22c55e" stroke-width="10"
+                  stroke-dasharray="326.73" stroke-dashoffset="326.73" stroke-linecap="round"/>
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span id="summary-pass-rate" class="text-2xl font-bold text-gray-900">--</span>
+              </div>
+            </div>
+            <div id="summary-level-badge" class="text-center"></div>
+          </div>
+          <!-- Right: Stat cards -->
+          <div class="flex gap-4">
+            <div class="bg-green-50 border border-green-200 rounded-lg px-5 py-3 text-center min-w-[90px]">
+              <div id="stat-passed" class="text-2xl font-bold text-green-600">0</div>
+              <div class="text-xs text-green-700 font-medium">Passed</div>
+            </div>
+            <div class="bg-red-50 border border-red-200 rounded-lg px-5 py-3 text-center min-w-[90px]">
+              <div id="stat-failed" class="text-2xl font-bold text-red-600">0</div>
+              <div class="text-xs text-red-700 font-medium">Failed</div>
+            </div>
+            <div class="bg-gray-50 border border-gray-200 rounded-lg px-5 py-3 text-center min-w-[90px]">
+              <div id="stat-skipped" class="text-2xl font-bold text-gray-500">0</div>
+              <div class="text-xs text-gray-600 font-medium">Skipped</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Levels -->
+    <section id="levels" class="pt-4">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Level Breakdown</h2>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <canvas id="levelChart" height="200"></canvas>
+      </div>
+    </section>
+
+    <!-- Section 3: Scopes -->
+    <section id="scopes" class="pt-4">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Scope Breakdown</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Repository Scope</h3>
+          <div id="scope-repo-rate" class="text-3xl font-bold text-gray-900 mb-3">--</div>
+          <div class="flex gap-4 text-sm">
+            <span id="scope-repo-passed" class="text-green-600 font-medium">0 passed</span>
+            <span id="scope-repo-failed" class="text-red-600 font-medium">0 failed</span>
+            <span id="scope-repo-skipped" class="text-gray-500 font-medium">0 skipped</span>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Application Scope</h3>
+          <div id="scope-app-rate" class="text-3xl font-bold text-gray-900 mb-3">--</div>
+          <div class="flex gap-4 text-sm">
+            <span id="scope-app-passed" class="text-green-600 font-medium">0 passed</span>
+            <span id="scope-app-failed" class="text-red-600 font-medium">0 failed</span>
+            <span id="scope-app-skipped" class="text-gray-500 font-medium">0 skipped</span>
+          </div>
+          <div id="scope-app-list" class="mt-4 border-t border-gray-100 pt-4 hidden">
+            <h4 class="text-sm font-semibold text-gray-700 mb-2">Discovered Apps</h4>
+            <ul id="scope-app-apps" class="text-sm text-gray-600 space-y-1"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Criteria Table -->
+    <section id="criteria" class="pt-4">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Criteria</h2>
+      <!-- Filters -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+        <div class="flex flex-wrap gap-6">
+          <div>
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide mr-2">Status:</span>
+            <button onclick="setFilter('status','all')" class="filter-btn filter-status text-sm px-3 py-1 rounded-full bg-gray-900 text-white" data-value="all">All</button>
+            <button onclick="setFilter('status','pass')" class="filter-btn filter-status text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="pass">Pass</button>
+            <button onclick="setFilter('status','fail')" class="filter-btn filter-status text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="fail">Fail</button>
+            <button onclick="setFilter('status','skip')" class="filter-btn filter-status text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="skip">Skip</button>
+          </div>
+          <div>
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide mr-2">Level:</span>
+            <button onclick="setFilter('level','all')" class="filter-btn filter-level text-sm px-3 py-1 rounded-full bg-gray-900 text-white" data-value="all">All</button>
+            <button onclick="setFilter('level','1')" class="filter-btn filter-level text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="1">1</button>
+            <button onclick="setFilter('level','2')" class="filter-btn filter-level text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="2">2</button>
+            <button onclick="setFilter('level','3')" class="filter-btn filter-level text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="3">3</button>
+            <button onclick="setFilter('level','4')" class="filter-btn filter-level text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="4">4</button>
+            <button onclick="setFilter('level','5')" class="filter-btn filter-level text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="5">5</button>
+          </div>
+          <div>
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide mr-2">Scope:</span>
+            <button onclick="setFilter('scope','all')" class="filter-btn filter-scope text-sm px-3 py-1 rounded-full bg-gray-900 text-white" data-value="all">All</button>
+            <button onclick="setFilter('scope','repository')" class="filter-btn filter-scope text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="repository">Repository</button>
+            <button onclick="setFilter('scope','application')" class="filter-btn filter-scope text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-value="application">Application</button>
+          </div>
+        </div>
+      </div>
+      <!-- Table -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="sort-header px-4 py-3 text-left font-semibold text-gray-600" onclick="sortTable('status')">Status</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-600">Criterion</th>
+              <th class="sort-header px-4 py-3 text-left font-semibold text-gray-600" onclick="sortTable('level')">Level</th>
+              <th class="sort-header px-4 py-3 text-left font-semibold text-gray-600" onclick="sortTable('scope')">Scope</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-600">Score</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-600">Rationale</th>
+            </tr>
+          </thead>
+          <tbody id="criteria-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 5: Actions -->
+    <section id="actions" class="pt-4">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Actions Priority View</h2>
+      <div id="actions-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      <div id="actions-empty" class="hidden bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500">
+        No failing criteria. Everything passed!
+      </div>
+    </section>
+
+    <!-- Section 6: Remediation anchor -->
+    <section id="remediation-section" class="pt-4">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Remediation</h2>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-gray-500">
+        Click on a failing criterion above or press the "Fix This" button to open the remediation panel with a copy-pasteable LLM prompt.
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- Remediation Drawer Overlay -->
+<div id="drawer-overlay" class="drawer-overlay fixed inset-0 bg-black bg-opacity-50 z-50 hidden" onclick="hideRemediation()"></div>
+
+<!-- Remediation Drawer -->
+<div id="drawer-panel" class="drawer-panel closed fixed top-0 right-0 h-full w-[600px] bg-white shadow-2xl z-50 overflow-y-auto">
+  <div class="p-6">
+    <!-- Close button -->
+    <button onclick="hideRemediation()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    <!-- Header -->
+    <h3 id="drawer-title" class="text-xl font-bold text-gray-900 pr-8">--</h3>
+    <div class="flex gap-2 mt-2">
+      <span id="drawer-level-badge"></span>
+      <span id="drawer-scope-badge"></span>
+    </div>
+    <!-- Score -->
+    <div class="mt-4">
+      <span class="text-sm font-semibold text-gray-500 uppercase">Score</span>
+      <div id="drawer-score" class="text-lg font-bold text-gray-900">--</div>
+    </div>
+    <!-- Description -->
+    <div class="mt-4">
+      <span class="text-sm font-semibold text-gray-500 uppercase">Rubric Description</span>
+      <p id="drawer-description" class="mt-1 text-sm text-gray-700 leading-relaxed">--</p>
+    </div>
+    <!-- Rationale -->
+    <div class="mt-4">
+      <span class="text-sm font-semibold text-gray-500 uppercase">Evaluation Rationale</span>
+      <p id="drawer-rationale" class="mt-1 text-sm text-gray-700 leading-relaxed">--</p>
+    </div>
+    <!-- Evidence -->
+    <div id="drawer-evidence-section" class="mt-4 hidden">
+      <span class="text-sm font-semibold text-gray-500 uppercase">Evidence</span>
+      <ul id="drawer-evidence" class="mt-1 text-sm text-gray-700 space-y-1 list-disc list-inside"></ul>
+    </div>
+    <!-- Prompt -->
+    <div class="mt-6">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-gray-500 uppercase">LLM Remediation Prompt</span>
+        <button id="copy-btn" onclick="copyPromptToClipboard()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <span id="copy-btn-text">Copy to Clipboard</span>
+        </button>
+      </div>
+      <pre class="bg-gray-900 text-green-400 font-mono text-sm p-4 rounded overflow-auto max-h-[60vh]"><code id="drawer-prompt"></code></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// Global state
+// =====================================================================
+let currentFilters = { status: 'all', level: 'all', scope: 'all' };
+let currentSort = { column: null, ascending: true };
+let currentPromptText = '';
+let allCriteriaRows = [];
+
+// =====================================================================
+// Level colors
+// =====================================================================
+const LEVEL_COLORS = {
+  1: '#3b82f6',
+  2: '#8b5cf6',
+  3: '#f59e0b',
+  4: '#f97316',
+  5: '#ef4444'
+};
+
+const LEVEL_BG_CLASSES = {
+  1: 'bg-blue-100 text-blue-800',
+  2: 'bg-purple-100 text-purple-800',
+  3: 'bg-amber-100 text-amber-800',
+  4: 'bg-orange-100 text-orange-800',
+  5: 'bg-red-100 text-red-800'
+};
+
+// =====================================================================
+// Utility functions
+// =====================================================================
+function humanize(criterionId) {
+  return criterionId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function getStatus(evaluation) {
+  if (evaluation.numerator === null || evaluation.numerator === undefined) return 'skip';
+  if (evaluation.numerator >= evaluation.denominator) return 'pass';
+  return 'fail';
+}
+
+function getLevelBadgeHTML(level, size) {
+  const cls = LEVEL_BG_CLASSES[level] || 'bg-gray-100 text-gray-800';
+  if (size === 'lg') {
+    return `<span class="inline-flex items-center justify-center w-14 h-14 rounded-full text-xl font-bold ${cls}">L${level}</span>`;
+  }
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${cls}">L${level}</span>`;
+}
+
+function getScopeBadgeHTML(scope) {
+  if (scope === 'repository') {
+    return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">Repository</span>';
+  }
+  return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">Application</span>';
+}
+
+function truncate(text, maxLen) {
+  if (!text) return '';
+  return text.length > maxLen ? text.substring(0, maxLen) + '...' : text;
+}
+
+// =====================================================================
+// computeStats
+// =====================================================================
+function computeStats(reportData, rubricData) {
+  const report = reportData.report || {};
+  const criteria = (rubricData && rubricData.criteria) ? rubricData.criteria : {};
+
+  let passed = 0, failed = 0, skipped = 0;
+  let ratioSum = 0, ratioCount = 0;
+
+  // Per-level breakdown
+  const levelData = {};
+  for (let l = 1; l <= 5; l++) {
+    levelData[l] = { total: 0, passed: 0, rate: 0 };
+  }
+
+  // Per-scope breakdown
+  const scopeData = {
+    repository: { total: 0, passed: 0, failed: 0, skipped: 0, ratioSum: 0, ratioCount: 0 },
+    application: { total: 0, passed: 0, failed: 0, skipped: 0, ratioSum: 0, ratioCount: 0 }
+  };
+
+  for (const [cid, evaluation] of Object.entries(report)) {
+    const status = getStatus(evaluation);
+    const rubricEntry = criteria[cid] || {};
+    const level = rubricEntry.level || 1;
+    const scope = rubricEntry.scope || 'repository';
+
+    if (status === 'skip') {
+      skipped++;
+      if (scopeData[scope]) scopeData[scope].skipped++;
+    } else if (status === 'pass') {
+      passed++;
+      const ratio = evaluation.numerator / evaluation.denominator;
+      ratioSum += ratio;
+      ratioCount++;
+      if (levelData[level]) {
+        levelData[level].total++;
+        levelData[level].passed++;
+      }
+      if (scopeData[scope]) {
+        scopeData[scope].total++;
+        scopeData[scope].passed++;
+        scopeData[scope].ratioSum += ratio;
+        scopeData[scope].ratioCount++;
+      }
+    } else {
+      failed++;
+      const ratio = evaluation.numerator / evaluation.denominator;
+      ratioSum += ratio;
+      ratioCount++;
+      if (levelData[level]) {
+        levelData[level].total++;
+      }
+      if (scopeData[scope]) {
+        scopeData[scope].total++;
+        scopeData[scope].failed++;
+        scopeData[scope].ratioSum += ratio;
+        scopeData[scope].ratioCount++;
+      }
+    }
+  }
+
+  const passRate = ratioCount > 0 ? ratioSum / ratioCount : 0;
+
+  // Compute level from pass rate: <0.2->1, <0.4->2, <0.6->3, <0.8->4, else->5
+  let level;
+  if (passRate < 0.2) level = 1;
+  else if (passRate < 0.4) level = 2;
+  else if (passRate < 0.6) level = 3;
+  else if (passRate < 0.8) level = 4;
+  else level = 5;
+
+  // Level breakdown rates
+  const levelBreakdown = [];
+  for (let l = 1; l <= 5; l++) {
+    const ld = levelData[l];
+    ld.rate = ld.total > 0 ? ld.passed / ld.total : 0;
+    levelBreakdown.push({ level: l, total: ld.total, passed: ld.passed, rate: ld.rate });
+  }
+
+  // Scope rates
+  for (const key of ['repository', 'application']) {
+    const sd = scopeData[key];
+    sd.rate = sd.ratioCount > 0 ? sd.ratioSum / sd.ratioCount : 0;
+  }
+
+  return { passRate, level, passed, failed, skipped, levelBreakdown, scopeBreakdown: scopeData };
+}
+
+// =====================================================================
+// parseFrontmatter
+// =====================================================================
+function parseFrontmatter(mdContent) {
+  if (!mdContent || typeof mdContent !== 'string') return { signalName: '', body: mdContent || '' };
+  const lines = mdContent.split('\n');
+  let signalName = '';
+  let body = mdContent;
+
+  if (lines[0] && lines[0].trim() === '---') {
+    let endIdx = -1;
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim() === '---') {
+        endIdx = i;
+        break;
+      }
+    }
+    if (endIdx > 0) {
+      const frontmatter = lines.slice(1, endIdx);
+      for (const line of frontmatter) {
+        const match = line.match(/^signal_name:\s*(.+)$/);
+        if (match) {
+          signalName = match[1].trim();
+        }
+      }
+      body = lines.slice(endIdx + 1).join('\n').trim();
+    }
+  }
+
+  return { signalName, body };
+}
+
+// =====================================================================
+// assemblePrompt
+// =====================================================================
+function assemblePrompt(criterionId) {
+  const report = (REPORT_DATA.report || {})[criterionId];
+  const rubric = ((RUBRIC_DATA && RUBRIC_DATA.criteria) ? RUBRIC_DATA.criteria : {})[criterionId];
+  const template = (REMEDIATION_DATA || {})[criterionId];
+
+  if (!report || !rubric) return '[No data available for this criterion]';
+
+  const { signalName, body } = parseFrontmatter(template);
+  const displayName = signalName || humanize(criterionId);
+
+  return `[Readiness Fix] ${displayName}
+
+Fix the failing signal: ${displayName} ([${report.numerator}/${report.denominator}])
+
+<system-reminder>
+You are fixing an Agent Readiness signal. Agent Readiness evaluates how well a repository supports autonomous AI agents working on the codebase.
+
+## Failing Signal
+
+**Signal**: ${displayName}
+**Score**: [${report.numerator}/${report.denominator}]
+**Description**: ${rubric.description}
+**Why it failed**: ${report.rationale}
+
+## Original Signal Evaluation Criteria
+
+The agent readiness report evaluated this signal using these instructions:
+
+${rubric.description}
+
+${body}
+
+## Your Task
+
+1. Explore the repository to understand the current state related to this signal
+2. Make **substantive improvements** to the codebase that genuinely address the signal
+3. Verify your fix addresses the issue
+4. Keep changes focused on this signal - don't refactor unrelated code
+5. When done with code changes, open a PULL REQUEST with the changes and return the PR URL
+
+## CRITICAL: Quality Standards
+
+Your fix must **genuinely improve the codebase**. Do NOT use workarounds or shortcuts:
+
+- **NO** empty placeholder files (e.g., empty test files, stub configs)
+- **NO** minimal implementations that technically pass but provide no real value
+- **NO** disabling checks or adding skip markers to pass validation
+- **NO** trivial changes that game the metric without improving quality
+
+## Completion
+
+- IMPORTANT: When finishing work and you made code changes, open a PULL REQUEST with the changes and return the PR URL
+- Provide a succinct summary of what you changed and why it genuinely improves the codebase
+</system-reminder>`;
+}
+
+// =====================================================================
+// Remediation drawer
+// =====================================================================
+function showRemediation(criterionId) {
+  const report = (REPORT_DATA.report || {})[criterionId];
+  const rubric = ((RUBRIC_DATA && RUBRIC_DATA.criteria) ? RUBRIC_DATA.criteria : {})[criterionId];
+
+  if (!report) return;
+
+  // Populate header
+  document.getElementById('drawer-title').textContent = humanize(criterionId);
+  const level = rubric ? rubric.level : 1;
+  const scope = rubric ? rubric.scope : 'repository';
+  document.getElementById('drawer-level-badge').innerHTML = getLevelBadgeHTML(level);
+  document.getElementById('drawer-scope-badge').innerHTML = getScopeBadgeHTML(scope);
+
+  // Score
+  const numDisplay = report.numerator !== null && report.numerator !== undefined ? report.numerator : '-';
+  document.getElementById('drawer-score').textContent = `${numDisplay} / ${report.denominator}`;
+
+  // Description
+  document.getElementById('drawer-description').textContent = rubric ? rubric.description : 'No description available';
+
+  // Rationale
+  document.getElementById('drawer-rationale').textContent = report.rationale || 'No rationale provided';
+
+  // Evidence
+  const evidenceSection = document.getElementById('drawer-evidence-section');
+  const evidenceList = document.getElementById('drawer-evidence');
+  const evidence = report.evidence || [];
+  if (evidence.length > 0) {
+    evidenceSection.classList.remove('hidden');
+    evidenceList.innerHTML = '';
+    for (const item of evidence) {
+      const li = document.createElement('li');
+      li.textContent = item;
+      evidenceList.appendChild(li);
+    }
+  } else {
+    evidenceSection.classList.add('hidden');
+  }
+
+  // Prompt
+  currentPromptText = assemblePrompt(criterionId);
+  document.getElementById('drawer-prompt').textContent = currentPromptText;
+
+  // Reset copy button
+  document.getElementById('copy-btn-text').textContent = 'Copy to Clipboard';
+
+  // Show drawer
+  document.getElementById('drawer-overlay').classList.remove('hidden');
+  const panel = document.getElementById('drawer-panel');
+  panel.classList.remove('closed');
+  panel.classList.add('open');
+}
+
+function hideRemediation() {
+  document.getElementById('drawer-overlay').classList.add('hidden');
+  const panel = document.getElementById('drawer-panel');
+  panel.classList.remove('open');
+  panel.classList.add('closed');
+}
+
+function copyPromptToClipboard() {
+  copyToClipboard(currentPromptText);
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btnText = document.getElementById('copy-btn-text');
+    btnText.textContent = 'Copied!';
+    setTimeout(() => {
+      btnText.textContent = 'Copy to Clipboard';
+    }, 2000);
+  });
+}
+
+// =====================================================================
+// Render: Summary
+// =====================================================================
+function renderSummary(stats, reportData) {
+  // Repo name
+  const repoUrl = reportData.repoUrl || '';
+  let repoName = repoUrl;
+  if (repoUrl) {
+    const parts = repoUrl.replace(/\.git$/, '').split('/');
+    repoName = parts[parts.length - 1] || repoUrl;
+  }
+  document.getElementById('summary-repo-name').textContent = repoName || 'Unknown Repository';
+
+  // Branch, commit, rubric
+  document.getElementById('summary-branch').textContent = 'Branch: ' + (reportData.branch || '--');
+  const commitHash = reportData.commitHash || '';
+  document.getElementById('summary-commit').textContent = 'Commit: ' + (commitHash ? commitHash.substring(0, 7) : '--');
+  document.getElementById('summary-rubric').textContent = 'Rubric: ' + (reportData.rubricVersion || '--');
+
+  // Pass rate
+  const pct = (stats.passRate * 100).toFixed(1) + '%';
+  document.getElementById('summary-pass-rate').textContent = pct;
+
+  // Progress ring
+  const circumference = 2 * Math.PI * 52; // ~326.73
+  const offset = circumference - (stats.passRate * circumference);
+  document.getElementById('progress-ring').setAttribute('stroke-dashoffset', offset);
+
+  // Level badge
+  document.getElementById('summary-level-badge').innerHTML = getLevelBadgeHTML(stats.level, 'lg');
+
+  // Stat cards
+  document.getElementById('stat-passed').textContent = stats.passed;
+  document.getElementById('stat-failed').textContent = stats.failed;
+  document.getElementById('stat-skipped').textContent = stats.skipped;
+
+  // Sidebar
+  document.getElementById('sidebar-pass-rate').textContent = pct;
+  document.getElementById('sidebar-level-badge').innerHTML = getLevelBadgeHTML(stats.level);
+}
+
+// =====================================================================
+// Render: Charts
+// =====================================================================
+function renderCharts(stats) {
+  const ctx = document.getElementById('levelChart').getContext('2d');
+  const labels = stats.levelBreakdown.map(lb =>
+    `Level ${lb.level}: ${lb.passed}/${lb.total} passed (${(lb.rate * 100).toFixed(0)}%)`
+  );
+  const data = stats.levelBreakdown.map(lb => (lb.rate * 100).toFixed(1));
+  const colors = stats.levelBreakdown.map(lb => LEVEL_COLORS[lb.level]);
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Pass Rate %',
+        data: data,
+        backgroundColor: colors,
+        borderRadius: 4,
+        barPercentage: 0.6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          min: 0,
+          max: 100,
+          ticks: { callback: v => v + '%' },
+          grid: { color: '#f3f4f6' }
+        },
+        y: {
+          grid: { display: false }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.parsed.x.toFixed(1) + '%'
+          }
+        }
+      }
+    }
+  });
+}
+
+// =====================================================================
+// Render: Scope Breakdown
+// =====================================================================
+function renderScopeBreakdown(stats, reportData) {
+  const repo = stats.scopeBreakdown.repository;
+  const app = stats.scopeBreakdown.application;
+
+  document.getElementById('scope-repo-rate').textContent = (repo.rate * 100).toFixed(1) + '%';
+  document.getElementById('scope-repo-passed').textContent = repo.passed + ' passed';
+  document.getElementById('scope-repo-failed').textContent = repo.failed + ' failed';
+  document.getElementById('scope-repo-skipped').textContent = repo.skipped + ' skipped';
+
+  document.getElementById('scope-app-rate').textContent = (app.rate * 100).toFixed(1) + '%';
+  document.getElementById('scope-app-passed').textContent = app.passed + ' passed';
+  document.getElementById('scope-app-failed').textContent = app.failed + ' failed';
+  document.getElementById('scope-app-skipped').textContent = app.skipped + ' skipped';
+
+  // Discovered apps
+  const apps = reportData.apps || {};
+  const appEntries = Object.entries(apps);
+  if (appEntries.length > 0) {
+    document.getElementById('scope-app-list').classList.remove('hidden');
+    const ul = document.getElementById('scope-app-apps');
+    ul.innerHTML = '';
+    for (const [name, info] of appEntries) {
+      const li = document.createElement('li');
+      const langs = (info.languages || []).join(', ');
+      li.innerHTML = `<span class="font-medium">${name}</span>` + (langs ? ` <span class="text-gray-400">(${langs})</span>` : '');
+      ul.appendChild(li);
+    }
+  }
+}
+
+// =====================================================================
+// Render: Criteria Table
+// =====================================================================
+function renderCriteriaTable(reportData, rubricData) {
+  const report = reportData.report || {};
+  const criteria = (rubricData && rubricData.criteria) ? rubricData.criteria : {};
+
+  allCriteriaRows = [];
+
+  for (const [cid, evaluation] of Object.entries(report)) {
+    const rubric = criteria[cid] || {};
+    const status = getStatus(evaluation);
+    const level = rubric.level || 1;
+    const scope = rubric.scope || 'repository';
+    const numDisplay = evaluation.numerator !== null && evaluation.numerator !== undefined ? evaluation.numerator : '-';
+    const score = `${numDisplay}/${evaluation.denominator}`;
+
+    allCriteriaRows.push({
+      id: cid,
+      status,
+      level,
+      scope,
+      score,
+      rationale: evaluation.rationale || '',
+      numerator: evaluation.numerator,
+      denominator: evaluation.denominator
+    });
+  }
+
+  applyFiltersAndSort();
+}
+
+function applyFiltersAndSort() {
+  let rows = [...allCriteriaRows];
+
+  // Apply filters
+  if (currentFilters.status !== 'all') {
+    rows = rows.filter(r => r.status === currentFilters.status);
+  }
+  if (currentFilters.level !== 'all') {
+    rows = rows.filter(r => String(r.level) === currentFilters.level);
+  }
+  if (currentFilters.scope !== 'all') {
+    rows = rows.filter(r => r.scope === currentFilters.scope);
+  }
+
+  // Apply sort
+  if (currentSort.column) {
+    const col = currentSort.column;
+    const dir = currentSort.ascending ? 1 : -1;
+    rows.sort((a, b) => {
+      let va, vb;
+      if (col === 'status') {
+        const order = { fail: 0, skip: 1, pass: 2 };
+        va = order[a.status] || 0;
+        vb = order[b.status] || 0;
+      } else if (col === 'level') {
+        va = a.level;
+        vb = b.level;
+      } else if (col === 'scope') {
+        va = a.scope;
+        vb = b.scope;
+      }
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }
+
+  renderTableRows(rows);
+}
+
+function renderTableRows(rows) {
+  const tbody = document.getElementById('criteria-tbody');
+  tbody.innerHTML = '';
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const tr = document.createElement('tr');
+    const stripe = i % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+    const isFailed = row.status === 'fail';
+
+    tr.className = `${stripe} hover:bg-blue-50 ${isFailed ? 'cursor-pointer' : 'cursor-default'}`;
+
+    if (isFailed) {
+      tr.onclick = () => showRemediation(row.id);
+    } else {
+      tr.title = 'No remediation needed';
+    }
+
+    // Status icon
+    let statusIcon;
+    if (row.status === 'pass') {
+      statusIcon = '<span class="text-green-500 font-bold text-base" title="Passed">&#10003;</span>';
+    } else if (row.status === 'fail') {
+      statusIcon = '<span class="text-red-500 font-bold text-base" title="Failed">&#10007;</span>';
+    } else {
+      statusIcon = '<span class="text-gray-400 font-bold text-base" title="Skipped">&mdash;</span>';
+    }
+
+    tr.innerHTML = `
+      <td class="px-4 py-2.5">${statusIcon}</td>
+      <td class="px-4 py-2.5 font-medium text-gray-900">${humanize(row.id)}</td>
+      <td class="px-4 py-2.5">${getLevelBadgeHTML(row.level)}</td>
+      <td class="px-4 py-2.5">${getScopeBadgeHTML(row.scope)}</td>
+      <td class="px-4 py-2.5 font-mono text-xs">${row.score}</td>
+      <td class="px-4 py-2.5 text-gray-500 text-xs">${truncate(row.rationale, 80)}</td>
+    `;
+
+    tbody.appendChild(tr);
+  }
+}
+
+function setFilter(type, value) {
+  currentFilters[type] = value;
+
+  // Update button styles
+  const buttons = document.querySelectorAll(`.filter-${type}`);
+  buttons.forEach(btn => {
+    if (btn.getAttribute('data-value') === value) {
+      btn.className = `filter-btn filter-${type} text-sm px-3 py-1 rounded-full bg-gray-900 text-white`;
+    } else {
+      btn.className = `filter-btn filter-${type} text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200`;
+    }
+  });
+
+  applyFiltersAndSort();
+}
+
+function sortTable(column) {
+  if (currentSort.column === column) {
+    currentSort.ascending = !currentSort.ascending;
+  } else {
+    currentSort.column = column;
+    currentSort.ascending = true;
+  }
+  applyFiltersAndSort();
+}
+
+// =====================================================================
+// Render: Actions
+// =====================================================================
+function renderActions(reportData, rubricData) {
+  const report = reportData.report || {};
+  const criteria = (rubricData && rubricData.criteria) ? rubricData.criteria : {};
+  const grid = document.getElementById('actions-grid');
+  const emptyMsg = document.getElementById('actions-empty');
+  grid.innerHTML = '';
+
+  // Collect failed criteria
+  const failed = [];
+  for (const [cid, evaluation] of Object.entries(report)) {
+    const status = getStatus(evaluation);
+    if (status !== 'fail') continue;
+    const rubric = criteria[cid] || {};
+    const ratio = evaluation.numerator / evaluation.denominator;
+    failed.push({
+      id: cid,
+      level: rubric.level || 1,
+      ratio,
+      numerator: evaluation.numerator,
+      denominator: evaluation.denominator,
+      rationale: evaluation.rationale || ''
+    });
+  }
+
+  // Sort: level ascending, then ratio ascending (worst first)
+  failed.sort((a, b) => {
+    if (a.level !== b.level) return a.level - b.level;
+    return a.ratio - b.ratio;
+  });
+
+  if (failed.length === 0) {
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg.classList.add('hidden');
+
+  for (const item of failed) {
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col';
+    card.innerHTML = `
+      <div class="flex items-start justify-between mb-3">
+        <h3 class="font-semibold text-gray-900">${humanize(item.id)}</h3>
+        ${getLevelBadgeHTML(item.level)}
+      </div>
+      <div class="text-sm font-mono text-red-600 mb-2">${item.numerator} / ${item.denominator}</div>
+      <p class="text-sm text-gray-500 flex-1 mb-4">${truncate(item.rationale, 120)}</p>
+      <button onclick="showRemediation('${item.id}')" class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded transition-colors">
+        Fix This
+      </button>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+// =====================================================================
+// Initialize
+// =====================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  const hasData = REPORT_DATA && REPORT_DATA.report && Object.keys(REPORT_DATA.report).length > 0;
+
+  if (!hasData) {
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('content-wrapper').classList.add('hidden');
+    return;
+  }
+
+  const stats = computeStats(REPORT_DATA, RUBRIC_DATA);
+  renderSummary(stats, REPORT_DATA);
+  renderCharts(stats);
+  renderScopeBreakdown(stats, REPORT_DATA);
+  renderCriteriaTable(REPORT_DATA, RUBRIC_DATA);
+  renderActions(REPORT_DATA, RUBRIC_DATA);
+});
+</script>
+
+</body>
+</html>

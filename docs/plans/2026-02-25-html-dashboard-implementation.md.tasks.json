@@ -1,0 +1,15 @@
+{
+  "planPath": "docs/plans/2026-02-25-html-dashboard-implementation.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Seed remediation template directory", "status": "pending"},
+    {"id": 2, "subject": "Task 2: TDD load_remediation_templates() in rubric.py", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: TDD remediation coverage test", "status": "pending", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 4: Author all 81 remediation templates", "status": "pending", "blockedBy": [3]},
+    {"id": 5, "subject": "Task 5: Create HTML dashboard template shell", "status": "pending", "blockedBy": [1]},
+    {"id": 6, "subject": "Task 6: TDD write_html_dashboard() in artifacts.py", "status": "pending", "blockedBy": [5, 2]},
+    {"id": 7, "subject": "Task 7: Integrate dashboard into pipeline", "status": "pending", "blockedBy": [6, 4]},
+    {"id": 8, "subject": "Task 8: Run full pipeline end-to-end", "status": "pending", "blockedBy": [7]},
+    {"id": 9, "subject": "Task 9: Final cleanup and commit", "status": "pending", "blockedBy": [8]}
+  ],
+  "lastUpdated": "2026-02-25T00:00:00Z"
+}

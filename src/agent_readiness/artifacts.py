@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from .models import ReadinessReportEnvelope
@@ -117,3 +118,52 @@ def write_artifacts(envelope: ReadinessReportEnvelope, rubric: FrozenRubric, out
     )
 
     return report_json_path, report_md_path, actions_json_path
+
+
+def _rubric_to_json_dict(rubric: FrozenRubric) -> dict[str, object]:
+    """Serialize rubric definitions for embedding in HTML."""
+    return {
+        "criteria": {
+            cid: {
+                "scope": d.scope,
+                "level": d.level,
+                "skippable": d.skippable,
+                "description": d.description,
+            }
+            for cid, d in rubric.definitions.items()
+        },
+        "criteria_order": list(rubric.criteria_order),
+        "repository_scope": sorted(rubric.repository_scope),
+        "application_scope": sorted(rubric.application_scope),
+    }
+
+
+def _inject_data(template: str, marker: str, data: str) -> str:
+    """Replace /*__MARKER__*/ {} /*__END__*/ with /*__MARKER__*/ {data} /*__END__*/."""
+    pattern = rf"/\*{re.escape(marker)}\*/.*?/\*__END__\*/"
+    replacement = f"/*{marker}*/ {data} /*__END__*/"
+    return re.sub(pattern, lambda _: replacement, template, count=1, flags=re.DOTALL)
+
+
+def write_html_dashboard(
+    envelope: ReadinessReportEnvelope,
+    rubric: FrozenRubric,
+    remediation_templates: dict[str, str],
+    out_dir: Path,
+) -> Path:
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    template_path = Path(__file__).parent / "templates" / "dashboard.html"
+    template = template_path.read_text(encoding="utf-8")
+
+    report_json = json.dumps(_report_to_json_dict(envelope), sort_keys=True)
+    rubric_json = json.dumps(_rubric_to_json_dict(rubric), sort_keys=True)
+    remediation_json = json.dumps(remediation_templates, sort_keys=True)
+
+    html = _inject_data(template, "__REPORT_DATA__", report_json)
+    html = _inject_data(html, "__RUBRIC_DATA__", rubric_json)
+    html = _inject_data(html, "__REMEDIATION_DATA__", remediation_json)
+
+    dashboard_path = out_dir / "readiness-dashboard.html"
+    dashboard_path.write_text(html, encoding="utf-8")
+    return dashboard_path

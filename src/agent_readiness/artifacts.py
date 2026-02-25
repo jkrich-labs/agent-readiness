@@ -100,7 +100,12 @@ def _build_markdown(envelope: ReadinessReportEnvelope, rubric: FrozenRubric) -> 
     return "\n".join(lines) + "\n"
 
 
-def write_artifacts(envelope: ReadinessReportEnvelope, rubric: FrozenRubric, out_dir: Path) -> tuple[Path, Path, Path]:
+def write_artifacts(
+    envelope: ReadinessReportEnvelope,
+    rubric: FrozenRubric,
+    out_dir: Path,
+    remediation_templates: dict[str, str] | None = None,
+) -> tuple[Path, Path, Path, Path | None]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     report_json_path = out_dir / "readiness-report.json"
@@ -117,7 +122,11 @@ def write_artifacts(envelope: ReadinessReportEnvelope, rubric: FrozenRubric, out
         encoding="utf-8",
     )
 
-    return report_json_path, report_md_path, actions_json_path
+    dashboard_path = None
+    if remediation_templates is not None:
+        dashboard_path = write_html_dashboard(envelope, rubric, remediation_templates, out_dir)
+
+    return report_json_path, report_md_path, actions_json_path, dashboard_path
 
 
 def _rubric_to_json_dict(rubric: FrozenRubric) -> dict[str, object]:

@@ -15,6 +15,13 @@ def test_cli_run_writes_outputs(sample_repo, tmp_path) -> None:
     assert (out / "readiness-report.json").exists()
 
 
+def test_cli_run_writes_dashboard(sample_repo, tmp_path) -> None:
+    out = tmp_path / "out"
+    code = main(["run", "--repo", str(sample_repo), "--out-dir", str(out), "--no-command-execution"])
+    assert code == 0
+    assert (out / "readiness-dashboard.html").exists()
+
+
 def test_cli_explain_known_criterion_returns_zero() -> None:
     code = main(["explain", "lint_config"])
     assert code == 0

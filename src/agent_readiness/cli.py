@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .artifacts import write_artifacts
 from .evaluators import build_registry
-from .rubric import DEFAULT_RUBRIC_VERSION, load_frozen_rubric
+from .rubric import DEFAULT_RUBRIC_VERSION, load_frozen_rubric, load_remediation_templates
 from .runner import ReadinessRunner, RunOptions
 
 
@@ -43,8 +43,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
         options=RunOptions(execute_commands=not args.no_command_execution),
     )
     envelope = runner.evaluate()
-    report_json, report_md, actions_json = write_artifacts(envelope, runner.rubric, args.out_dir)
+    remediation = load_remediation_templates(args.rubric_version)
+    report_json, report_md, actions_json, dashboard_html = write_artifacts(
+        envelope, runner.rubric, args.out_dir, remediation_templates=remediation,
+    )
     rate, level = runner.summarize(envelope)
+
+    artifacts_dict = {
+        "readiness-report.json": str(report_json),
+        "readiness-report.md": str(report_md),
+        "readiness-actions.json": str(actions_json),
+    }
+    if dashboard_html:
+        artifacts_dict["readiness-dashboard.html"] = str(dashboard_html)
 
     output = {
         "repoUrl": envelope.repoUrl,
@@ -52,11 +63,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         "criteriaCount": len(envelope.report),
         "passRate": round(rate, 4),
         "level": level,
-        "artifacts": {
-            "readiness-report.json": str(report_json),
-            "readiness-report.md": str(report_md),
-            "readiness-actions.json": str(actions_json),
-        },
+        "artifacts": artifacts_dict,
     }
     print(json.dumps(output, indent=2))
     return 0

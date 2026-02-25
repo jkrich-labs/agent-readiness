@@ -45,11 +45,14 @@ def _contains_any(text: str, tokens: tuple[str, ...]) -> bool:
     return any(token.lower() in lowered for token in tokens)
 
 
+_UNSET = object()
+
+
 def _git_remote_slug(ctx: EvaluationContext) -> str | None:
     key = "git_remote_slug"
-    cached = ctx.cache.get(key)
-    if isinstance(cached, str) or cached is None:
-        return cached
+    cached = ctx.cache.get(key, _UNSET)
+    if cached is not _UNSET:
+        return cached  # type: ignore[return-value]
 
     result = ctx.run(["git", "remote", "get-url", "origin"], timeout=5)
     if result.exit_code != 0:
@@ -341,8 +344,18 @@ def _evaluate_repository_criterion(ctx: EvaluationContext, criterion_id: str) ->
 
     if criterion_id == "gitignore_comprehensive":
         text = _read_text(root / ".gitignore")
-        expected = (".env", "node_modules", ".venv", "dist", "build")
-        passed = all(token in text for token in expected)
+        if not text.strip():
+            return repo_score(False, ".gitignore is missing or empty")
+        # Always require .env (secrets); other tokens depend on detected languages
+        required = [".env"]
+        languages = ctx.discovery.languages
+        if any(lang in languages for lang in ("typescript", "javascript")):
+            required.append("node_modules")
+        if "python" in languages:
+            required.append(".venv")
+        # At least one build output pattern
+        has_build_output = any(token in text for token in ("dist", "build", "target", "__pycache__"))
+        passed = all(token in text for token in required) and has_build_output
         return repo_score(passed, "gitignore covers common generated/secrets files" if passed else "gitignore missing common exclusions")
 
     if criterion_id == "privacy_compliance":
@@ -527,8 +540,10 @@ def _evaluate_application_criterion(ctx: EvaluationContext, criterion_id: str) -
             passed = passed or ctx.text_search(("sonar.qualitygate.wait",), within=ctx.repo_root)
 
         elif criterion_id == "test_naming_conventions":
-            passed = ctx.text_search(("test_*.py",), within=app_dir)
-            passed = passed or ctx.text_search(("*.spec.ts",), within=app_dir)
+            # Check for consistent test naming: test_*.py for Python, *.spec.ts/*.test.ts for TS/JS
+            passed = any(app_dir.glob("**/test_*.py"))
+            passed = passed or any(app_dir.glob("**/*.spec.ts")) or any(app_dir.glob("**/*.test.ts"))
+            passed = passed or any(app_dir.glob("**/*.spec.js")) or any(app_dir.glob("**/*.test.js"))
             passed = passed or (app_dir / "pytest.ini").exists()
 
         elif criterion_id == "test_isolation":
@@ -594,7 +609,7 @@ def _evaluate_application_criterion(ctx: EvaluationContext, criterion_id: str) -
             else:
                 passed = ctx.text_search(("health",), within=app_dir)
                 passed = passed or ctx.text_search(("readiness",), within=app_dir)
-                passed = passed or (app_dir / "Dockerfile").exists() and "healthcheck" in _read_text(app_dir / "Dockerfile").lower()
+                passed = passed or ((app_dir / "Dockerfile").exists() and "healthcheck" in _read_text(app_dir / "Dockerfile").lower())
 
         elif criterion_id == "circuit_breakers":
             if not service_app:
@@ -615,8 +630,8 @@ def _evaluate_application_criterion(ctx: EvaluationContext, criterion_id: str) -
             if not service_app:
                 applicable = False
             else:
-                workflows = _read_text(ctx.repo_root / ".github/workflows/ci.yml")
-                passed = any(token in workflows.lower() for token in ("owasp", "zap", "stackhawk", "nuclei", "burp"))
+                ci_content = _read_text(ctx.repo_root / ".github/workflows/ci.yml")
+                passed = any(token in ci_content.lower() for token in ("owasp", "zap", "stackhawk", "nuclei", "burp"))
 
         elif criterion_id == "pii_handling":
             if not service_app:
@@ -642,7 +657,7 @@ def _evaluate_application_criterion(ctx: EvaluationContext, criterion_id: str) -
             passed = passed or ctx.text_search(("error", "issue", "automation"), within=ctx.repo_root)
 
         else:
-            passed = False
+            raise ValueError(f"No application-scope evaluator for {criterion_id}")
 
         if applicable:
             applicable_found = True

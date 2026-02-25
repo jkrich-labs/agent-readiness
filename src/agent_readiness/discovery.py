@@ -31,12 +31,15 @@ def _has_any_file(root: Path, names: tuple[str, ...]) -> bool:
     return any((root / name).exists() for name in names)
 
 
+_SKIP_DIRS = {".git", "node_modules", ".venv", "dist", "build", "target", ".pytest_cache"}
+
+
 def _contains_suffix(root: Path, suffixes: tuple[str, ...], max_files: int = 600) -> bool:
     seen = 0
     for path in root.rglob("*"):
+        if any(part in _SKIP_DIRS for part in path.parts):
+            continue
         if path.is_dir():
-            if path.name in {".git", "node_modules", ".venv", "dist", "build", "target", ".pytest_cache"}:
-                continue
             continue
         seen += 1
         if path.suffix.lower() in suffixes:

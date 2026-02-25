@@ -41,7 +41,7 @@ def _build_actions(envelope: ReadinessReportEnvelope, rubric: FrozenRubric) -> l
             continue
 
         definition = rubric.definitions[criterion_id]
-        ratio = value.numerator / value.denominator if value.denominator else 0.0
+        ratio = value.numerator / value.denominator
         actions.append(
             {
                 "criterion": criterion_id,
@@ -53,7 +53,7 @@ def _build_actions(envelope: ReadinessReportEnvelope, rubric: FrozenRubric) -> l
             }
         )
 
-    actions.sort(key=lambda item: (-int(item["level"]), float(item["ratio"])))
+    actions.sort(key=lambda item: (int(item["level"]), float(item["ratio"])))
     return actions
 
 

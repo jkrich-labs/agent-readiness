@@ -7,9 +7,7 @@ name = "agent-readiness"
 version = "0.1.0"
 description = "Local Droid-compatible readiness report evaluator"
 requires-python = ">=3.11"
-dependencies = [
-  "requests>=2.31,<3",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [

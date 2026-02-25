@@ -4,7 +4,6 @@ __all__ = [
     "artifacts",
     "cli",
     "command_runner",
-    "criteria",
     "discovery",
     "evaluators",
     "models",

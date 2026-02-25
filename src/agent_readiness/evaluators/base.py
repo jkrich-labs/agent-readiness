@@ -45,14 +45,56 @@ class EvaluationContext:
         return any(base.glob(pattern))
 
     def text_search(self, tokens: tuple[str, ...], within: Path | None = None) -> bool:
+        """Search file paths and file contents for tokens.
+
+        First checks file paths in the index (fast). If no match, reads
+        file contents of relevant files (slower but more thorough).
+        """
         base = within.resolve() if within else self.repo_root
         prefix = "" if base == self.repo_root else str(base.relative_to(self.repo_root)).rstrip("/") + "/"
         lowered_tokens = tuple(token.lower() for token in tokens)
+
+        # Phase 1: search file paths (fast)
         for rel in self._file_index:
             if prefix and not rel.startswith(prefix):
                 continue
             if all(token in rel for token in lowered_tokens):
                 return True
+
+        # Phase 2: search file contents
+        # Only read text-like files to avoid binary reads
+        _text_suffixes = {
+            ".py", ".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs",
+            ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini", ".conf",
+            ".md", ".txt", ".rst", ".html", ".css", ".scss",
+            ".go", ".rs", ".java", ".rb", ".sh", ".bash", ".zsh",
+            ".xml", ".env", ".properties", ".graphql", ".gql",
+            ".dockerfile", ".tf", ".hcl",
+        }
+        files_checked = 0
+        max_content_files = 500
+        for rel in self._file_index:
+            if prefix and not rel.startswith(prefix):
+                continue
+            suffix = "." + rel.rsplit(".", 1)[-1] if "." in rel else ""
+            # Also read known config files without extensions or with special names
+            basename = rel.rsplit("/", 1)[-1] if "/" in rel else rel
+            if suffix not in _text_suffixes and basename not in (
+                "dockerfile", "makefile", "gemfile", "rakefile",
+                ".gitignore", ".dockerignore", ".env.example",
+            ):
+                continue
+            files_checked += 1
+            if files_checked > max_content_files:
+                break
+            filepath = self.repo_root / rel
+            try:
+                content = filepath.read_text(encoding="utf-8", errors="ignore").lower()
+            except OSError:
+                continue
+            if all(token in content for token in lowered_tokens):
+                return True
+
         return False
 
     def run(self, command: list[str], cwd: Path | None = None, timeout: int | None = None) -> CommandResult:

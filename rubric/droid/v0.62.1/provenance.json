@@ -1,0 +1,19 @@
+{
+  "artifacts": {
+    "criteria_order_sha256": "cc7e14e0e75306832df65192c3febe174f3bc9a5dafdd27a193749b83885d72c",
+    "criteria_scope_sha256": "26c0cf7be240505918868832a5e3a36b46824a885c3d7f7bc8a497ce7f9584d7",
+    "scoring_rules_sha256": "4d4785c6114afde742f8429f85fd0f5cdece262db85999fd27a55c22a2ebeb66"
+  },
+  "extracted_at": "2026-02-25T19:21:28.104960+00:00",
+  "rubric_version": "v0.62.1",
+  "source": {
+    "kind": "factory_session_prompt",
+    "marker": "You are the Agent Readiness Droid",
+    "path": "/home/johnr/.factory/sessions/-home-johnr-dev-repos-pinion/632a3d8e-7627-40f4-86c0-7a0e31fe4e63.jsonl",
+    "sha256": "87fa93255e2c713144772b90d010cad7e7e677808c90662be40087d16b0122a8"
+  },
+  "tooling": {
+    "droid_version": "0.62.1",
+    "extract_script": "scripts/extract_droid_rubric.py"
+  }
+}

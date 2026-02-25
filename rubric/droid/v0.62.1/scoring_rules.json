@@ -1,0 +1,31 @@
+{
+  "level_bands": [
+    {
+      "level": 1,
+      "max_exclusive": 0.2,
+      "min_inclusive": 0.0
+    },
+    {
+      "level": 2,
+      "max_exclusive": 0.4,
+      "min_inclusive": 0.2
+    },
+    {
+      "level": 3,
+      "max_exclusive": 0.6,
+      "min_inclusive": 0.4
+    },
+    {
+      "level": 4,
+      "max_exclusive": 0.8,
+      "min_inclusive": 0.6
+    },
+    {
+      "level": 5,
+      "max_inclusive": 1.0,
+      "min_inclusive": 0.8
+    }
+  ],
+  "pass_rate_formula": "average(numerator/denominator) over non-skipped criteria",
+  "skip_policy": "exclude_null_numerator"
+}

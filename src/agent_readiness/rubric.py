@@ -96,3 +96,19 @@ def load_frozen_rubric(version: str = DEFAULT_RUBRIC_VERSION, rubric_root: Path 
         scoring_rules=scoring_rules,
         provenance=provenance,
     )
+
+
+def load_remediation_templates(
+    version: str = DEFAULT_RUBRIC_VERSION,
+    rubric_root: Path | None = None,
+) -> dict[str, str]:
+    base = (rubric_root or _default_rubric_root()) / version / "remediation"
+    if not base.is_dir():
+        raise FileNotFoundError(f"Remediation directory not found: {base}")
+
+    templates: dict[str, str] = {}
+    for md_file in sorted(base.glob("*.md")):
+        criterion_id = md_file.stem
+        templates[criterion_id] = md_file.read_text(encoding="utf-8")
+
+    return templates
